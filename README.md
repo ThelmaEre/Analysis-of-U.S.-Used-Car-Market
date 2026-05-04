@@ -5,8 +5,7 @@ This project aims to analyze the U.S. used car market using Hadoop and Hive to p
 
 ## Files
 - Code: [Team 1 Final Project Code](https://github.com/ThelmaEre/Analysis-of-U.S.-Used-Car-Market/blob/main/Team%201%20Final%20Project%20code.txt)
-)
-- Instructions [preprocess.ipynb](PASTE_LINK_TO_NOTEBOOK_HERE)
+- Instructions: [Team 1 Final Code Instructions](https://github.com/ThelmaEre/Analysis-of-U.S.-Used-Car-Market/blob/main/Team%201%20Final%20Code%20Instructions.docx)
 - Powerpoint Presentation: [Project_Presentation.pptx](PASTE_LINK_TO_PPTX_HERE)
 - CSV files
 
