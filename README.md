@@ -15,7 +15,7 @@ This project aims to analyze the U.S. used car market using Hadoop and Hive to p
 *  Tableau
 
 ## How to replicate project
-3. Use the instructions in 'Instructions' for step by step instructions.
+Use the instructions in 'Instructions' for step by step instructions.
 
 ## Dataset Link
 https://www.kaggle.com/datasets/ananaymital/us-used-cars-dataset
