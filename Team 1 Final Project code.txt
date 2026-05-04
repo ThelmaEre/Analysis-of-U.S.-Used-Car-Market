@@ -1,0 +1,715 @@
+CIS 5200 Final Code
+Analysis of U.S. Used Car Market Trends Using Hadoop and Hive
+Team 1: Brenda Beltran, Edward Salame, Thelma Eremionkhale
+
+
+-- STEP 1: Run on LOCAL machine CLI 
+
+cd downloads 
+
+scp archive.zip teremio@132.226.148.236:/tmp 
+
+
+
+-- STEP 2: SSH into server 
+
+ssh teremio@132.226.148.236 
+
+
+-- Confirm file is there 
+
+ls -lh /tmp 
+
+
+-- Unzip 
+
+unzip /tmp/archive.zip -d /tmp 
+
+
+
+-- Upload to HDFS 
+
+hdfs dfs -mkdir /tmp/car 
+
+hdfs dfs -put /tmp/used_cars_data.csv /tmp/car 
+
+hdfs dfs -ls /tmp/car 
+
+
+
+-- Confirm CSV is in HDFS then delete from server 
+
+rm /tmp/archive.zip 
+
+rm /tmp/used_cars_data.csv 
+
+ 
+
+OPEN ANOTHER WINDOW FOR THIS STEP
+
+-- STEP 3: Connect to Hive and Create External Table-- 
+
+ssh teremio@132.226.148.236 
+
+beeline 
+
+use teremio; 
+
+ 
+
+DROP TABLE IF EXISTS used_cars_raw; 
+
+ 
+
+CREATE EXTERNAL TABLE used_cars_raw ( 
+
+    vin STRING, back_legroom STRING, bed STRING, bed_height STRING, 
+
+    bed_length STRING, body_type STRING, cabin STRING, city STRING, 
+
+    city_fuel_economy STRING, combine_fuel_economy STRING, daysonmarket STRING, 
+
+    dealer_zip STRING, description STRING, engine_cylinders STRING, 
+
+    engine_displacement STRING, engine_type STRING, exterior_color STRING, 
+
+    fleet STRING, frame_damaged STRING, franchise_dealer STRING, 
+
+    franchise_make STRING, front_legroom STRING, fuel_tank_volume STRING, 
+
+    fuel_type STRING, has_accidents STRING, height STRING, 
+
+    highway_fuel_economy STRING, horsepower STRING, interior_color STRING, 
+
+    isCab STRING, is_certified STRING, is_cpo STRING, is_new STRING, 
+
+    is_oemcpo STRING, latitude STRING, length STRING, listed_date STRING, 
+
+    listing_color STRING, listing_id STRING, longitude STRING, 
+
+    main_picture_url STRING, major_options STRING, make_name STRING, 
+
+    maximum_seating STRING, mileage STRING, model_name STRING, 
+
+    owner_count STRING, power STRING, price STRING, salvage STRING, 
+
+    savings_amount STRING, seller_rating STRING, sp_id STRING, 
+
+    sp_name STRING, theft_title STRING, torque STRING, transmission STRING, 
+
+    transmission_display STRING, trimId STRING, trim_name STRING, 
+
+    vehicle_damage_category STRING, wheel_system STRING, 
+
+    wheel_system_display STRING, wheelbase STRING, width STRING, year STRING 
+
+) 
+
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde' 
+
+WITH SERDEPROPERTIES ( 
+
+    "separatorChar" = ",", 
+
+    "quoteChar"     = "\"", 
+
+    "escapeChar"    = "\\" 
+
+) 
+
+STORED AS TEXTFILE 
+
+LOCATION '/tmp/car' 
+
+TBLPROPERTIES ("skip.header.line.count"="1"); 
+
+ 
+
+-- View your table-- 
+
+SELECT * FROM used_cars_raw LIMIT 5; 
+DESCRIBE FORMATTED used_cars_raw; 
+
+
+-- STEP 4: Create Clean Table-- 
+
+DROP TABLE IF EXISTS used_cars_clean; 
+
+CREATE TABLE used_cars_clean AS 
+
+SELECT 
+
+    CAST(latitude AS DOUBLE)                    AS latitude, 
+
+    CAST(longitude AS DOUBLE)                   AS longitude, 
+
+    city, 
+
+    YEAR(TO_DATE(listed_date))                  AS listing_year, 
+
+    MONTH(TO_DATE(listed_date))                 AS listing_month, 
+
+    CAST(daysonmarket AS INT)                   AS days_on_market, 
+
+    CASE 
+
+        WHEN CAST(daysonmarket AS INT) <= 20 THEN 'High Demand' 
+
+        WHEN CAST(daysonmarket AS INT) <= 45 THEN 'Medium Demand' 
+
+        ELSE 'Low Demand' 
+
+    END                                         AS demand_category, 
+
+    make_name, 
+
+    fuel_type, 
+
+    CAST(price AS DOUBLE)                       AS price, 
+
+    CAST(mileage AS DOUBLE)                     AS mileage, 
+
+    CASE 
+
+        WHEN has_accidents = 'True' THEN true 
+
+        ELSE false 
+
+    END                                         AS has_accidents 
+
+FROM used_cars_raw 
+
+WHERE 
+
+    price IS NOT NULL 
+
+    AND CAST(price AS DOUBLE) > 500 
+
+    AND latitude IS NOT NULL 
+
+    AND longitude IS NOT NULL 
+
+    AND listed_date IS NOT NULL 
+
+    AND make_name IS NOT NULL 
+
+    AND daysonmarket IS NOT NULL 
+
+    AND fuel_type IS NOT NULL 
+
+    AND has_accidents IS NOT NULL 
+
+    AND mileage IS NOT NULL 
+
+    AND CAST(mileage AS DOUBLE) > 0 
+
+LIMIT 500000; 
+
+ 
+
+-- Verify clean table-- 
+
+SELECT * FROM used_cars_clean LIMIT 5; 
+DESCRIBE FORMATTED used_cars_clean; 
+
+
+ 
+
+-- QUERY 1  : Demand by Fuel Type Over Time-- 
+
+SELECT 
+
+    TRIM(fuel_type)                 AS fuel_type, 
+
+    listing_year, 
+
+    COUNT(*)                        AS total_listings, 
+
+    ROUND(AVG(days_on_market), 1)   AS avg_days_on_market 
+
+FROM used_cars_clean 
+
+WHERE 
+
+    listing_year >= 2016 
+
+    AND fuel_type IS NOT NULL 
+
+    AND TRIM(fuel_type) <> '' 
+
+    AND days_on_market IS NOT NULL 
+
+GROUP BY 
+
+    TRIM(fuel_type), 
+
+    listing_year 
+
+HAVING 
+
+    COUNT(*) >= 50 
+
+ORDER BY 
+
+    listing_year, 
+
+    total_listings DESC 
+
+LIMIT 20;
+
+
+-- QUERY 2  : Accident History Impact on Price and Demand-- 
+
+SELECT 
+
+    has_accidents, 
+
+    COUNT(*)                        AS total_listings, 
+
+    ROUND(AVG(price), 2)            AS avg_price, 
+
+    ROUND(AVG(days_on_market), 1)   AS avg_days_on_market 
+
+FROM used_cars_clean 
+
+GROUP BY 
+
+    has_accidents 
+
+ORDER BY 
+
+    avg_price DESC; 
+
+
+
+-- QUERY 3  : Top 10 Used Car Brands in the US-- 
+
+SELECT 
+
+    make_name, 
+
+    COUNT(*)                        AS total_listings, 
+
+    ROUND(AVG(days_on_market), 1)   AS avg_days_on_market 
+
+FROM used_cars_clean 
+
+GROUP BY 
+
+    make_name 
+
+HAVING 
+
+    COUNT(*) >= 500 
+
+ORDER BY 
+
+    avg_days_on_market ASC, 
+
+    total_listings DESC 
+
+LIMIT 10; 
+
+
+
+-- QUERY 4  : Distribution of Car Sales by State (Spatial)-- 
+
+SELECT 
+
+    city, 
+
+    ROUND(latitude, 4)              AS latitude, 
+
+    ROUND(longitude, 4)             AS longitude, 
+
+    COUNT(*)                        AS total_listings, 
+
+    ROUND(AVG(price), 2)            AS avg_price, 
+
+    ROUND(AVG(days_on_market), 1)   AS avg_days_on_market 
+
+FROM used_cars_clean 
+
+GROUP BY 
+
+    city, 
+
+    ROUND(latitude, 4), 
+
+    ROUND(longitude, 4) 
+
+ORDER BY 
+
+    total_listings DESC 
+
+LIMIT 20;
+
+
+-- QUERY 5  : Tempo-Spatial Seasonal Trends by Month and Location-- 
+
+SELECT 
+
+    city, 
+
+    ROUND(latitude, 4)                          AS latitude, 
+
+    ROUND(longitude, 4)                         AS longitude, 
+
+    CONCAT(listing_year, '-', 
+
+        LPAD(CAST(listing_month AS STRING), 2, '0'), 
+
+        '-01')                                  AS listing_date, 
+
+    COUNT(*)                                    AS total_listings, 
+
+    ROUND(AVG(days_on_market), 1)               AS avg_days_on_market, 
+
+    demand_category 
+
+FROM used_cars_clean 
+
+GROUP BY 
+
+    city, 
+
+    ROUND(latitude, 4), 
+
+    ROUND(longitude, 4), 
+
+    CONCAT(listing_year, '-', 
+
+        LPAD(CAST(listing_month AS STRING), 2, '0'), 
+
+        '-01'), 
+
+    demand_category 
+
+ORDER BY 
+
+    listing_date, 
+
+    total_listings DESC 
+
+LIMIT 20;
+
+
+ORDER BY 
+
+    fuel_type, 
+
+    avg_mileage ASC 
+
+LIMIT 20;
+
+
+
+
+-- STEP 6: Export All Queries to CSV-- 
+
+  
+
+-- EXPORT QUERY 1: Demand by Fuel Type Over Time 
+
+INSERT OVERWRITE DIRECTORY '/tmp/teremio/fueltype_demand' 
+
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+
+SELECT 
+
+    TRIM(fuel_type)                 AS fuel_type, 
+
+    listing_year, 
+
+    COUNT(*)                        AS total_listings, 
+
+    ROUND(AVG(days_on_market), 1)   AS avg_days_on_market 
+
+FROM used_cars_clean 
+
+WHERE 
+
+    listing_year >= 2016 
+
+    AND fuel_type IS NOT NULL 
+
+    AND TRIM(fuel_type) <> '' 
+
+    AND days_on_market IS NOT NULL 
+
+GROUP BY 
+
+    TRIM(fuel_type), 
+
+    listing_year 
+
+HAVING 
+
+    COUNT(*) >= 50 
+
+ORDER BY 
+
+    listing_year, 
+
+    total_listings DESC; 
+
+  
+
+-- EXPORT QUERY 2: Accident History Impact on Price and Demand 
+
+INSERT OVERWRITE DIRECTORY '/tmp/teremio/accident_impact' 
+
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+
+SELECT 
+
+    has_accidents, 
+
+    COUNT(*)                        AS total_listings, 
+
+    ROUND(AVG(price), 2)            AS avg_price, 
+
+    ROUND(AVG(days_on_market), 1)   AS avg_days_on_market 
+
+FROM used_cars_clean 
+
+GROUP BY 
+
+    has_accidents 
+
+ORDER BY 
+
+    avg_price DESC; 
+
+  
+
+-- EXPORT QUERY 3: Top 10 Used Car Brands in the US 
+
+INSERT OVERWRITE DIRECTORY '/tmp/teremio/top_brands' 
+
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+
+SELECT 
+
+    make_name, 
+
+    COUNT(*)                        AS total_listings, 
+
+    ROUND(AVG(days_on_market), 1)   AS avg_days_on_market 
+
+FROM used_cars_clean 
+
+GROUP BY 
+
+    make_name 
+
+HAVING 
+
+    COUNT(*) >= 500 
+
+ORDER BY 
+
+    avg_days_on_market ASC, 
+
+    total_listings DESC 
+
+LIMIT 10; 
+
+  
+
+-- EXPORT QUERY 4: Distribution of Car Sales by State (Spatial) 
+
+INSERT OVERWRITE DIRECTORY '/tmp/teremio/sales_by_state' 
+
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+
+SELECT 
+
+    city, 
+
+    ROUND(latitude, 4)              AS latitude, 
+
+    ROUND(longitude, 4)             AS longitude, 
+
+    COUNT(*)                        AS total_listings, 
+
+    ROUND(AVG(price), 2)            AS avg_price, 
+
+    ROUND(AVG(days_on_market), 1)   AS avg_days_on_market 
+
+FROM used_cars_clean 
+
+GROUP BY 
+
+    city, 
+
+    ROUND(latitude, 4), 
+
+    ROUND(longitude, 4) 
+
+ORDER BY 
+
+    total_listings DESC; 
+
+  
+
+-- EXPORT QUERY 5: Tempo-Spatial Seasonal Trends by Month and Location 
+
+INSERT OVERWRITE DIRECTORY '/tmp/teremio/seasonal_trends' 
+
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+
+SELECT 
+
+    city, 
+
+    ROUND(latitude, 4)                          AS latitude, 
+
+    ROUND(longitude, 4)                         AS longitude, 
+
+    CONCAT(listing_year, '-', 
+
+        LPAD(CAST(listing_month AS STRING), 2, '0'), 
+
+        '-01')                                  AS listing_date, 
+
+    COUNT(*)                                    AS total_listings, 
+
+    ROUND(AVG(days_on_market), 1)               AS avg_days_on_market, 
+
+    demand_category 
+
+FROM used_cars_clean 
+
+GROUP BY 
+
+    city, 
+
+    ROUND(latitude, 4), 
+
+    ROUND(longitude, 4), 
+
+    CONCAT(listing_year, '-', 
+
+        LPAD(CAST(listing_month AS STRING), 2, '0'), 
+
+        '-01'), 
+
+    demand_category 
+
+ORDER BY 
+
+    listing_date, 
+
+    total_listings DESC; 
+
+ 
+
+  
+
+-- EXPORT QUERY 6:  Average price by fuel type and mileage 
+
+INSERT OVERWRITE DIRECTORY '/tmp/teremio/fuel_mileage' 
+
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+
+SELECT 
+
+    TRIM(fuel_type)                 AS fuel_type, 
+
+    CASE 
+
+        WHEN mileage < 20000  THEN '0-20k' 
+
+        WHEN mileage < 40000  THEN '20k-40k' 
+
+        WHEN mileage < 60000  THEN '40k-60k' 
+
+        WHEN mileage < 80000  THEN '60k-80k' 
+
+        WHEN mileage < 100000 THEN '80k-100k' 
+
+        ELSE '100k+' 
+
+    END                             AS mileage_bucket, 
+
+    COUNT(*)                        AS total_listings, 
+
+    ROUND(AVG(price), 2)            AS avg_price, 
+
+    ROUND(AVG(mileage), 0)          AS avg_mileage 
+
+FROM used_cars_clean 
+
+WHERE 
+
+    mileage IS NOT NULL 
+
+    AND mileage > 0 
+
+    AND fuel_type IS NOT NULL 
+
+    AND TRIM(fuel_type) <> '' 
+
+    AND TRIM(fuel_type) <> 'N/A' 
+
+GROUP BY 
+
+    TRIM(fuel_type), 
+
+    CASE 
+
+        WHEN mileage < 20000  THEN '0-20k' 
+
+        WHEN mileage < 40000  THEN '20k-40k' 
+
+        WHEN mileage < 60000  THEN '40k-60k' 
+
+        WHEN mileage < 80000  THEN '60k-80k' 
+
+        WHEN mileage < 100000 THEN '80k-100k' 
+
+        ELSE '100k+' 
+
+    END 
+
+ORDER BY 
+
+    fuel_type, 
+
+    avg_mileage ASC; 
+
+  
+
+-- STEP 7: Pull files from HDFS to server home directory 
+
+hdfs dfs -get /tmp/teremio/fueltype_demand/000000_0 fueltype_demand.csv 
+
+hdfs dfs -get /tmp/teremio/accident_impact/000000_0 accident_impact.csv 
+
+hdfs dfs -get /tmp/teremio/top_brands/000000_0 top_brands.csv 
+
+hdfs dfs -get /tmp/teremio/sales_by_state/000000_0 sales_by_state.csv 
+
+hdfs dfs -get /tmp/teremio/seasonal_trends/000000_0 seasonal_trends.csv 
+
+hdfs dfs -get /tmp/teremio/fuel_mileage/000000_0 fuel_mileage.csv 
+
+ls -lh 
+
+
+
+-- STEP 8: SCP files to your local machine (run on LOCAL CLI)-- 
+
+scp teremio@132.226.148.236:~/fueltype_demand.csv C:\Users\thelm\downloads\ 
+
+scp teremio@132.226.148.236:~/accident_impact.csv C:\Users\thelm\downloads\ 
+
+scp teremio@132.226.148.236:~/top_brands.csv C:\Users\thelm\downloads\ 
+
+scp teremio@132.226.148.236:~/sales_by_state.csv C:\Users\thelm\downloads\ 
+
+scp teremio@132.226.148.236:~/seasonal_trends.csv C:\Users\thelm\downloads\ 
+
+scp teremio@132.226.148.236:~/fuel_mileage.csv C:\Users\thelm\downloads\ 
+
