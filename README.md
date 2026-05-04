@@ -8,9 +8,13 @@ This project aims to analyze the U.S. used car market using Hadoop and Hive to p
 - Instructions: [Team 1 Final Code Instructions](https://csula.sharepoint.com/:w:/s/CIS5200Project_bga97r/IQCjDv700d2HRLJepOllLTCmAXpRW6iZqZhs3Acjrld_hco?e=67i7xy)
 - Powerpoint Presentation: [Team 1 Presentation.pptx](https://csula.sharepoint.com/:p:/s/CIS5200Project_bga97r/IQC1JxqfUXLPRIcYUiCiY4OXAXqG2OjuLQs_q0DPPFEZuAU?e=fEaKtx&nav=eyJzSWQiOjI4OCwiY0lkIjo0MTA5ODMzMzk2fQ)
 
-## How to Run
-1. Download the used car dataset from Kaggle.
-2. Install required software :Tableau, 3D Excel
+## Tools and Technologies used
+*  Hive
+*  Hadoop
+*  Excel
+*  Tableau
+
+## How to replicate project
 3. Use the instructions in 'Instructions' for step by step instructions.
 
 ## Dataset Link
